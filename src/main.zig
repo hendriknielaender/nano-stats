@@ -6,8 +6,8 @@ extern fn nano_stats_run(app: ?*anyopaque) void;
 extern fn nano_stats_destroy(app: ?*anyopaque) void;
 
 pub fn main() !void {
-    // Create the status bar app with "Hello World" title
-    const app = nano_stats_create("Hello World") orelse {
+    // Create the status bar app
+    const app = nano_stats_create("NanoStats") orelse {
         std.debug.print("Failed to create status bar app\n", .{});
         return error.AppCreationFailed;
     };
