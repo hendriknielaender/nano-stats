@@ -13,7 +13,18 @@ pub fn build(b: *std.Build) void {
     // Create a custom step to build the Swift framework
     const swift_build = b.addSystemCommand(&[_][]const u8{
         "swiftc",
-        "macos/Sources/NanoStats.swift",
+        // Core files
+        "macos/Sources/Core/Memory/MemoryTypes.swift",
+        "macos/Sources/Core/Memory/SystemMemoryMonitor.swift",
+        "macos/Sources/Core/Memory/ProcessMemoryMonitor.swift",
+        // UI files
+        "macos/Sources/UI/StatusBarView.swift",
+        "macos/Sources/UI/MenuBuilder.swift",
+        "macos/Sources/UI/ProcessListMenu.swift",
+        // App files
+        "macos/Sources/App/NanoStatsApp.swift",
+        // C Interface
+        "macos/Sources/C/CInterface.swift",
         "-emit-library",
         "-o",
         "zig-out/lib/libNanoStats.dylib",
