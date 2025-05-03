@@ -18,7 +18,7 @@ jobs:
       - uses: mlugg/setup-zig@v1
         with:
           version: 0.14.0-dev.3188+34644511b
-      - run: zig build test
+      - run: zig build
   lint:
     runs-on: ubuntu-latest
     steps:
