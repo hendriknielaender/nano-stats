@@ -1,0 +1,18 @@
+on:
+  workflow_dispatch: {}
+
+name: Release PR
+
+jobs:
+  build-macos:
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # The native app is built with native XCode tooling. This also does
+      # codesigning.
+      - name: Build NanoStats.app
+        run: |
+          cd macos
+          sudo xcode-select -s /Applications/Xcode_16.0.app
+          xcodebuild -target NanoStats -configuration Release
