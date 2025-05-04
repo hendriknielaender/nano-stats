@@ -6,6 +6,10 @@ name: Release PR
 
 jobs:
   build-macos:
+    strategy:
+      matrix:
+        os: [macos-latest]
+    runs-on: ${{matrix.os}}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
