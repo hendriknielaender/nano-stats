@@ -14,6 +14,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: XCode Select
+        run: sudo xcode-select -s /Applications/Xcode_16.0.app
+
       # The native app is built with native XCode tooling. This also does
       # codesigning.
       - name: Build NanoStats.app
