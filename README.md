@@ -1,8 +1,19 @@
-# NanoStats
-<h1 align="center">
-   <img src="nanostats.png" width="13%" height="13%" alt="nanostats logo" title="nanostats logo">
+<!-- LOGO -->
+<h1>
+<p align="center">
+  <img src="nanostats.png" width="128" height="128" alt="nanostats logo" title="nanostats logo">
+  <br>NanoStats
 </h1>
-A lightweight macOS status bar utility for monitoring system resources.
+  <p align="center">
+    A lightweight macOS status bar utility for monitoring system resources.
+    <br />
+    <a href="#features">Features</a>
+    ·
+    <a href="">Download</a>
+    ·
+    <a href="">Documentation</a>
+  </p>
+</p>
 
 ## Features
 
