@@ -1,17 +1,39 @@
+import Darwin
+// macos/Sources/Core/Memory/SystemMemoryMonitor.swift
 import Foundation
 
 /// Responsible for monitoring system-wide memory usage.
-final class SystemMemoryMonitor {
+public final class SystemMemoryMonitor {
   /// Holds the system-wide memory breakdown calculated from vm_statistics64.
-  struct MemoryBreakdown {
-    let total_bytes: UInt64
-    let active_bytes: UInt64
-    let wired_bytes: UInt64
-    let inactive_bytes: UInt64
-    let compressed_bytes: UInt64
-    let free_bytes: UInt64
-    let used_bytes: UInt64
-    let usage_percentage: Double
+  public struct MemoryBreakdown {
+    public let total_bytes: UInt64
+    public let active_bytes: UInt64
+    public let wired_bytes: UInt64
+    public let inactive_bytes: UInt64
+    public let compressed_bytes: UInt64
+    public let free_bytes: UInt64
+    public let used_bytes: UInt64
+    public let usage_percentage: Double
+
+    public init(
+      total_bytes: UInt64,
+      active_bytes: UInt64,
+      wired_bytes: UInt64,
+      inactive_bytes: UInt64,
+      compressed_bytes: UInt64,
+      free_bytes: UInt64,
+      used_bytes: UInt64,
+      usage_percentage: Double
+    ) {
+      self.total_bytes = total_bytes
+      self.active_bytes = active_bytes
+      self.wired_bytes = wired_bytes
+      self.inactive_bytes = inactive_bytes
+      self.compressed_bytes = compressed_bytes
+      self.free_bytes = free_bytes
+      self.used_bytes = used_bytes
+      self.usage_percentage = usage_percentage
+    }
   }
 
   private let host_vm_info64_flavor: Int32 = HOST_VM_INFO64
@@ -19,9 +41,11 @@ final class SystemMemoryMonitor {
     MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size
   )
 
+  public init() {}
+
   /// Fetches the total physical memory available on the system.
   /// Returns 0 if the operation fails.
-  func fetchTotalPhysicalMemory() -> UInt64 {
+  public func fetchTotalPhysicalMemory() -> UInt64 {
     var physical_memory: UInt64 = 0
     var size = MemoryLayout<UInt64>.size
     let result = sysctlbyname("hw.memsize", &physical_memory, &size, nil, 0)
@@ -36,7 +60,7 @@ final class SystemMemoryMonitor {
 
   /// Fetches current system memory statistics.
   /// Returns nil if the operation fails.
-  func fetchMemoryBreakdown() -> MemoryBreakdown? {
+  public func fetchMemoryBreakdown() -> MemoryBreakdown? {
     let total_physical_bytes = fetchTotalPhysicalMemory()
     guard total_physical_bytes > 0 else { return nil }
 

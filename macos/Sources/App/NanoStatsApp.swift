@@ -1,7 +1,9 @@
+// macos/Sources/App/NanoStatsApp.swift
 import AppKit
+import Foundation
 
 /// Main application class that manages the status bar item and menu.
-final class NanoStatsApp: NSObject, NSMenuDelegate {
+public final class NanoStatsApp: NSObject, NSMenuDelegate {
   // MARK: - Properties
   private let status_bar: NSStatusBar
   private let status_item: NSStatusItem
@@ -20,8 +22,11 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
   private let top_process_count: Int = 10
   private let status_item_width: CGFloat = 40.0
 
+  // State
+  private var showingDetails: Bool = false
+
   // MARK: - Initialization
-  init(withTitle title: String) {
+  public init(withTitle title: String) {
     assert(Thread.isMainThread, "NanoStatsApp must be initialized on the main thread.")
 
     self.app = NSApplication.shared
@@ -53,7 +58,7 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
 
     // Create and configure custom view
     let custom_view = MemoryStatusView(
-      frame: NSRect(x: 5, y: 0, width: status_item_width, height: 20))
+      frame: NSRect(x: 0, y: 0, width: status_item_width, height: 22))
     self.status_view = custom_view
 
     // Set the custom view as the status item's view
@@ -76,7 +81,7 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
   }
 
   // MARK: - Public API
-  func run() {
+  public func run() {
     assert(Thread.isMainThread, "run() must be called on the main thread.")
 
     self.memory_update_timer = Timer.scheduledTimer(
@@ -98,7 +103,7 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
     self.app.run()
   }
 
-  func cleanup() {
+  public func cleanup() {
     self.memory_update_timer?.invalidate()
     self.memory_update_timer = nil
 
@@ -108,7 +113,7 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
   }
 
   // MARK: - Menu Delegate
-  func menuWillOpen(_ menu: NSMenu) {
+  public func menuWillOpen(_ menu: NSMenu) {
     assert(Thread.isMainThread, "menuWillOpen must be called on the main thread.")
     assert(menu === self.process_menu, "Delegate called for unexpected menu.")
 
@@ -125,51 +130,60 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
     formatter.zeroPadsFractionDigits = false
     formatter.isAdaptive = true
 
-    // System Memory Overview
+    // Memory Overview - Simplified
     if let breakdown = memory_monitor.fetchMemoryBreakdown() {
-      // Total RAM (header)
+      // Total with usage percentage
       let total_item = NSMenuItem(
-        title: "Total RAM: \(formatter.string(fromByteCount: Int64(breakdown.total_bytes)))",
+        title: "Memory: \(formatter.string(fromByteCount: Int64(breakdown.total_bytes)))",
         action: nil,
         keyEquivalent: ""
       )
       total_item.isEnabled = false
       process_menu.addItem(total_item)
 
-      // Separator
+      // Visual indicator
+      addMemoryUsageBar(percentage: breakdown.usage_percentage)
+
+      // Key metrics users care about
+      addDisabledMenuItem(
+        title: "Used: \(formatter.string(fromByteCount: Int64(breakdown.used_bytes)))")
+      addDisabledMenuItem(
+        title: "Available: \(formatter.string(fromByteCount: Int64(breakdown.free_bytes)))")
+
+      // Add "Show Details..." option for power users
+      if showingDetails {
+        process_menu.addItem(NSMenuItem.separator())
+        addDisabledMenuItem(title: "Memory Details")
+        addDisabledMenuItem(
+          title: "  Active: \(formatter.string(fromByteCount: Int64(breakdown.active_bytes)))")
+        addDisabledMenuItem(
+          title: "  Wired: \(formatter.string(fromByteCount: Int64(breakdown.wired_bytes)))")
+        addDisabledMenuItem(
+          title: "  Inactive: \(formatter.string(fromByteCount: Int64(breakdown.inactive_bytes)))")
+        addDisabledMenuItem(
+          title:
+            "  Compressed: \(formatter.string(fromByteCount: Int64(breakdown.compressed_bytes)))")
+      }
+
+      // Toggle for showing details
       process_menu.addItem(NSMenuItem.separator())
-
-      // Memory breakdown
-      addMemoryItem(title: "Active", value: breakdown.active_bytes, formatter: formatter)
-      addMemoryItem(title: "Wired", value: breakdown.wired_bytes, formatter: formatter)
-      addMemoryItem(title: "Inactive", value: breakdown.inactive_bytes, formatter: formatter)
-      addMemoryItem(title: "Compressed", value: breakdown.compressed_bytes, formatter: formatter)
-      addMemoryItem(title: "Used", value: breakdown.used_bytes, formatter: formatter)
-      addMemoryItem(title: "Free", value: breakdown.free_bytes, formatter: formatter)
-    } else {
-      let error_item = NSMenuItem(
-        title: "Could not fetch memory details", action: nil, keyEquivalent: "")
-      error_item.isEnabled = false
-      process_menu.addItem(error_item)
-    }
-
-    // Process List
-    process_menu.addItem(NSMenuItem.separator())
-
-    let processes_header = NSMenuItem(title: "Top Processes", action: nil, keyEquivalent: "")
-    processes_header.isEnabled = false
-    process_menu.addItem(processes_header)
-
-    guard self.total_physical_memory_bytes > 0 else {
-      let error_item = NSMenuItem(
-        title: "Error: Invalid total memory for process list",
-        action: nil,
+      let details_item = NSMenuItem(
+        title: showingDetails ? "Hide Details" : "Show Details...",
+        action: #selector(toggleDetails),
         keyEquivalent: ""
       )
-      error_item.isEnabled = false
-      process_menu.addItem(error_item)
+      details_item.target = self
+      process_menu.addItem(details_item)
+    } else {
+      addDisabledMenuItem(title: "Could not fetch memory details")
+    }
 
-      // Quit item
+    // Process List - Streamlined
+    process_menu.addItem(NSMenuItem.separator())
+    addDisabledMenuItem(title: "Apps Using Memory")
+
+    guard self.total_physical_memory_bytes > 0 else {
+      addDisabledMenuItem(title: "Error: Could not determine memory usage")
       process_menu.addItem(NSMenuItem.separator())
       addQuitItem()
       return
@@ -182,51 +196,48 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
     )
 
     if top_processes.isEmpty {
-      let error_item = NSMenuItem(
-        title: "Could not fetch processes", action: nil, keyEquivalent: "")
-      error_item.isEnabled = false
-      process_menu.addItem(error_item)
+      addDisabledMenuItem(title: "No significant memory usage detected")
     } else {
-      // Add processes with proper styling
+      // Add processes - Apple style with subtitles
       for process in top_processes {
         let memory_str = formatter.string(fromByteCount: Int64(process.memory_usage_bytes))
 
-        // Create attributed string for process item
-        let process_name = process.name
-        let memory_info =
-          "\(memory_str) (\(String(format: "%.1f%%", process.memory_usage_percentage)))"
+        // Create menu item with app name and memory as subtitle
+        let menu_item = NSMenuItem(title: process.name, action: nil, keyEquivalent: "")
 
-        let attributed_string = NSMutableAttributedString()
-
-        // Process name (regular weight)
-        let process_attributes: [NSAttributedString.Key: Any] = [
-          .font: NSFont.systemFont(ofSize: 13),
-          .foregroundColor: NSColor.labelColor,
-        ]
-        attributed_string.append(
-          NSAttributedString(string: process_name, attributes: process_attributes))
-
-        // Spacer
-        attributed_string.append(NSAttributedString(string: " — ", attributes: process_attributes))
-
-        // Memory info (lighter weight)
-        let memory_attributes: [NSAttributedString.Key: Any] = [
-          .font: NSFont.systemFont(ofSize: 13, weight: .light),
-          .foregroundColor: NSColor.secondaryLabelColor,
-        ]
-        attributed_string.append(
-          NSAttributedString(string: memory_info, attributes: memory_attributes))
-
-        // Create menu item with attributed string
-        let menu_item = NSMenuItem()
-        menu_item.attributedTitle = attributed_string
-
-        // Add PID as tooltip
-        menu_item.toolTip = "Process ID: \(process.pid)"
+        // Use subtitle if available (macOS 11+), otherwise fall back to title with dash
+        if #available(macOS 11.0, *) {
+          menu_item.subtitle = memory_str
+        } else {
+          menu_item.title = "\(process.name) — \(memory_str)"
+        }
 
         // Add to menu
         process_menu.addItem(menu_item)
       }
+
+      // Option to open Activity Monitor
+      process_menu.addItem(NSMenuItem.separator())
+      let activity_monitor_item = NSMenuItem(
+        title: "Open Activity Monitor...",
+        action: #selector(openActivityMonitor),
+        keyEquivalent: ""
+      )
+      activity_monitor_item.target = self
+      process_menu.addItem(activity_monitor_item)
+    }
+
+    // Add memory pressure warning if needed
+    if let breakdown = memory_monitor.fetchMemoryBreakdown(), breakdown.usage_percentage > 85 {
+      process_menu.addItem(NSMenuItem.separator())
+
+      let high_usage_item = NSMenuItem(
+        title: "Memory pressure is high",
+        action: #selector(showMemoryTips),
+        keyEquivalent: ""
+      )
+      high_usage_item.target = self
+      process_menu.addItem(high_usage_item)
     }
 
     // Quit item
@@ -234,37 +245,44 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
     addQuitItem()
   }
 
-  private func addMemoryItem(title: String, value: UInt64, formatter: ByteCountFormatter) {
-    // Create attributed string for memory item
-    let attributed_string = NSMutableAttributedString()
+  private func addMemoryUsageBar(percentage: Double) {
+    // Create a visual indicator of memory usage
+    let bar_view = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 18))
 
-    // Title (regular weight)
-    let title_attributes: [NSAttributedString.Key: Any] = [
-      .font: NSFont.systemFont(ofSize: 13),
-      .foregroundColor: NSColor.labelColor,
-    ]
-    attributed_string.append(NSAttributedString(string: title, attributes: title_attributes))
+    // Background track
+    let track = NSView(frame: NSRect(x: 16, y: 7, width: 168, height: 4))
+    track.wantsLayer = true
+    track.layer?.backgroundColor = NSColor.tertiaryLabelColor.cgColor
+    track.layer?.cornerRadius = 2
 
-    // Spacer
-    attributed_string.append(NSAttributedString(string: ": ", attributes: title_attributes))
+    // Filled portion
+    let fill_width = Int((percentage / 100.0) * 168)
+    let fill = NSView(frame: NSRect(x: 16, y: 7, width: fill_width, height: 4))
+    fill.wantsLayer = true
 
-    // Value (lighter weight)
-    let value_attributes: [NSAttributedString.Key: Any] = [
-      .font: NSFont.systemFont(ofSize: 13, weight: .light),
-      .foregroundColor: NSColor.secondaryLabelColor,
-    ]
-    attributed_string.append(
-      NSAttributedString(
-        string: formatter.string(fromByteCount: Int64(value)),
-        attributes: value_attributes
-      ))
+    // Color based on usage
+    if percentage > 85 {
+      fill.layer?.backgroundColor = NSColor.systemRed.cgColor
+    } else if percentage > 60 {
+      fill.layer?.backgroundColor = NSColor.systemOrange.cgColor
+    } else {
+      fill.layer?.backgroundColor = NSColor.systemBlue.cgColor
+    }
 
-    // Create menu item with attributed string
-    let item = NSMenuItem()
-    item.attributedTitle = attributed_string
-    item.isEnabled = false
+    fill.layer?.cornerRadius = 2
 
-    process_menu.addItem(item)
+    bar_view.addSubview(track)
+    bar_view.addSubview(fill)
+
+    let menu_item = NSMenuItem()
+    menu_item.view = bar_view
+    process_menu.addItem(menu_item)
+  }
+
+  private func addDisabledMenuItem(title: String) {
+    let menu_item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+    menu_item.isEnabled = false
+    process_menu.addItem(menu_item)
   }
 
   private func addQuitItem() {
@@ -275,53 +293,6 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
     )
     quit_item.target = NSApp
     process_menu.addItem(quit_item)
-  }
-
-  private func addSystemMemoryItems(
-    breakdown: SystemMemoryMonitor.MemoryBreakdown, formatter: ByteCountFormatter
-  ) {
-    addDisabledMenuItem(
-      title: "Total RAM: \(formatter.string(fromByteCount: Int64(breakdown.total_bytes)))")
-    process_menu.addItem(NSMenuItem.separator())
-    addDisabledMenuItem(
-      title: "Active: \(formatter.string(fromByteCount: Int64(breakdown.active_bytes)))")
-    addDisabledMenuItem(
-      title: "Wired: \(formatter.string(fromByteCount: Int64(breakdown.wired_bytes)))")
-    addDisabledMenuItem(
-      title: "Inactive: \(formatter.string(fromByteCount: Int64(breakdown.inactive_bytes)))")
-    addDisabledMenuItem(
-      title: "Compressed: \(formatter.string(fromByteCount: Int64(breakdown.compressed_bytes)))")
-    addDisabledMenuItem(
-      title: "Used (A+I+W): \(formatter.string(fromByteCount: Int64(breakdown.used_bytes)))")
-    addDisabledMenuItem(
-      title: "Free: \(formatter.string(fromByteCount: Int64(breakdown.free_bytes)))")
-  }
-
-  private func addProcessItems(
-    processes: [ProcessMemoryMonitor.ProcessDetails], formatter: ByteCountFormatter
-  ) {
-    for process in processes {
-      let memory_str = formatter.string(fromByteCount: Int64(process.memory_usage_bytes))
-      let menu_item = NSMenuItem(
-        title: String(
-          format: "%@ - %@ (%.1f%%)",
-          process.name,
-          memory_str,
-          process.memory_usage_percentage),
-        action: nil,
-        keyEquivalent: ""
-      )
-
-      // Add PID as tooltip
-      menu_item.toolTip = "PID: \(process.pid)"
-      process_menu.addItem(menu_item)
-    }
-  }
-
-  private func addDisabledMenuItem(title: String) {
-    let menu_item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-    menu_item.isEnabled = false
-    process_menu.addItem(menu_item)
   }
 
   private func updateMemoryDisplay() {
@@ -336,6 +307,34 @@ final class NanoStatsApp: NSObject, NSMenuDelegate {
       if let button = self.status_item.button {
         button.title = "RAM: Error"
       }
+    }
+  }
+
+  @objc private func openActivityMonitor() {
+    let url = URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app")
+    NSWorkspace.shared.open(url)
+  }
+
+  @objc private func toggleDetails() {
+    showingDetails = !showingDetails
+    // Refresh menu
+    if let menu = status_item.menu {
+      self.menuWillOpen(menu)
+    }
+  }
+
+  @objc private func showMemoryTips() {
+    // In a full implementation, this would show a window with memory optimization tips
+    let alert = NSAlert()
+    alert.messageText = "Memory Usage Tips"
+    alert.informativeText =
+      "• Close applications you're not using\n• Restart applications that have been running for a long time\n• Check Activity Monitor for memory-intensive processes"
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "Open Activity Monitor")
+
+    let response = alert.runModal()
+    if response == NSApplication.ModalResponse.alertSecondButtonReturn {
+      openActivityMonitor()
     }
   }
 }

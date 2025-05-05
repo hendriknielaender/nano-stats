@@ -1,24 +1,35 @@
+import Darwin
+// macos/Sources/Core/Memory/ProcessMemoryMonitor.swift
 import Foundation
 
 /// Responsible for monitoring process-specific memory usage.
-final class ProcessMemoryMonitor {
+public final class ProcessMemoryMonitor {
   /// Holds information about a single running process for display.
-  struct ProcessDetails: Comparable, Hashable {
-    let pid: pid_t
-    let name: String
-    let memory_usage_bytes: UInt64
-    let memory_usage_percentage: Double
+  public struct ProcessDetails: Comparable, Hashable {
+    public let pid: pid_t
+    public let name: String
+    public let memory_usage_bytes: UInt64
+    public let memory_usage_percentage: Double
+
+    public init(
+      pid: pid_t, name: String, memory_usage_bytes: UInt64, memory_usage_percentage: Double
+    ) {
+      self.pid = pid
+      self.name = name
+      self.memory_usage_bytes = memory_usage_bytes
+      self.memory_usage_percentage = memory_usage_percentage
+    }
 
     // Sort by usage descending
-    static func < (lhs: ProcessDetails, rhs: ProcessDetails) -> Bool {
+    public static func < (lhs: ProcessDetails, rhs: ProcessDetails) -> Bool {
       return lhs.memory_usage_bytes > rhs.memory_usage_bytes
     }
 
-    static func == (lhs: ProcessDetails, rhs: ProcessDetails) -> Bool {
+    public static func == (lhs: ProcessDetails, rhs: ProcessDetails) -> Bool {
       return lhs.pid == rhs.pid
     }
 
-    func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
       hasher.combine(pid)
     }
   }
@@ -26,12 +37,14 @@ final class ProcessMemoryMonitor {
   private let sysctl_kern_proc_all: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL]
   private let proc_pid_task_all_info_flavor: Int32 = PROC_PIDTASKALLINFO
 
+  public init() {}
+
   /// Fetches a list of running processes sorted by resident memory size.
   /// - Parameters:
   ///   - limit: Maximum number of processes to return
   ///   - totalPhysicalMemory: Total physical memory in bytes for percentage calculation
   /// - Returns: Array of ProcessDetails sorted by memory usage (descending)
-  func fetchTopMemoryProcesses(limit: Int, totalPhysicalMemory: UInt64) -> [ProcessDetails] {
+  public func fetchTopMemoryProcesses(limit: Int, totalPhysicalMemory: UInt64) -> [ProcessDetails] {
     assert(limit > 0 && totalPhysicalMemory > 0)
     var process_details: [ProcessDetails] = []
     var process_dict: [pid_t: ProcessDetails] = [:]
