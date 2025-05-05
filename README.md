@@ -4,8 +4,6 @@
 </h1>
 A lightweight macOS status bar utility for monitoring system resources.
 
-<img src="nanostats-ram.png" alt="nanostats ram menu bar" width="25%" height="25%">
-
 ## Features
 
 - ✅ RAM Usage - Shows memory usage with detailed breakdown
@@ -24,3 +22,5 @@ A lightweight macOS status bar utility for monitoring system resources.
 ## Usage
 
 TBD
+
+<img src="nanostats-ram.png" alt="nanostats ram menu bar" width="25%" height="25%">
